@@ -28,7 +28,10 @@ def path_coord_to_gazebo_coord(x, y):
         return (gazebo_x, gazebo_y)
 
 if __name__ == "__main__":
-    os.system("source /home/stalin/autonomous_navigation/devel/setup.sh")
+
+    # os.system("source /home/stalin/autonomous_navigation/devel/setup.sh")
+    # 这这句话自己写在~/.bashrc里面去，写在这儿除了stalin之外谁都报错
+
     parser = argparse.ArgumentParser(description = 'test BARN navigation challenge')
     parser.add_argument('--world_idx', type=int)
     
@@ -63,6 +66,7 @@ if __name__ == "__main__":
     
     rospy.init_node('gym', anonymous=True) #, log_level=rospy.FATAL)
     rospy.set_param('/use_sim_time', True)
+    rospy.set_param('/world_num', args.world_idx)  # 保存世界编号到ROScore备用
     
     # GazeboSimulation provides useful interface to communicate with gazebo  
     gazebo_sim = GazeboSimulation(init_position=INIT_POSITION)
@@ -109,6 +113,7 @@ if __name__ == "__main__":
     #print(curr_coor)
     subprocess.Popen(args = ['roslaunch', launch_file ,'world_arg:='+ str(args.world_idx)])
     print("continue..")
+    
     # Make sure your navigation stack recives a goal of (0, 10, 0), which is 10 meters away
     # along postive y-axis.
 

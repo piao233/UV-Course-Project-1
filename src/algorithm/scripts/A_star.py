@@ -114,7 +114,10 @@ class SearchTree(object):
                     print(path_node.loc)
                     if path_node.loc[0] - 34 < pgm.size[1] and path_node.loc[1] < pgm.size[0] and path_node.loc[0]>34:
                         pgm.putpixel((path_node.loc[1],path_node.loc[0]-34),128)
-                pgm.save("/home/stalin/autonomous_navigation/src/jackal_helper/worlds/BARN/map_files/map_pgm_3_0.pgm")
+                
+
+                save_path = join(base_path, 'worlds/BARN/A_star_map', world_name)
+                pgm.save(save_path)
                 break
             else:
                 self.add_to_openlist(current_node)
@@ -125,20 +128,34 @@ class SearchTree(object):
             path.append(node)
             node = node.parent
         return path
+    
+
 from scipy.spatial.transform import Rotation as R
 
 def quaternion2euler(quaternion):
     r = R.from_quat(quaternion)
     euler = r.as_euler('zyx', degrees=True)
-    return euler      
+    return euler  
+
+
+
+
+world_name = ""  # 全局，供保存路径图使用
+
 if __name__ == '__main__':
-    
+
     rospy.init_node('A_star', anonymous=True)
-    #joint1 = rospy.get_param("/world_name")
+    rospack = rospkg.RosPack()
+    base_path = rospack.get_path('jackal_helper')
+    world_idx = rospy.get_param('world_num')
+    world_name = "map_pgm_%d.pgm" %(world_idx)
+
     gazebo_sim = GazeboSimulation(init_position=INIT_POSITION)
     init_coor = [INIT_POSITION[0], INIT_POSITION[1]]
     goal_coor =  [GOAL_POSITION[0], GOAL_POSITION[1]]
-    im = Image.open("/home/stalin/autonomous_navigation/src/jackal_helper/worlds/BARN/map_files/map_pgm_5.pgm")    # 读取文件\\\
+    im = Image.open(join(base_path, 'worlds/BARN/map_files', world_name))
+
+    # im = Image.open("/home/stalin/autonomous_navigation/src/jackal_helper/worlds/BARN/map_files/map_pgm_5.pgm")    # 读取文件\\\
     #30*66 0.0
     #print(data.shape)
     pixels = np.concatenate((255*np.ones((34,30)),np.matrix(im)))
@@ -168,7 +185,7 @@ if __name__ == '__main__':
         euler = quaternion2euler([pose.x,pose.y,pose.z,pose.w])
         print(euler)
         vel = ((goal_coor[0] - pos.x)**2+(goal_coor[1] - pos.y)**2)**0.3
-        gazebo_sim.pub_cmd_vel([0, 1])#v w
+        gazebo_sim.pub_cmd_vel([0, 1])  # v w
         curr_time_0 = rospy.get_time()
         if curr_time_0 - curr_time < 0.1:
             time.sleep(0.1 - (curr_time_0 - curr_time))
