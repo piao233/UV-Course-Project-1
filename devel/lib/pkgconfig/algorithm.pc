@@ -1,8 +1,0 @@
-prefix=/home/shu233/woooork/my_autonomous_navigation/Course_Project_1/devel
-
-Name: algorithm
-Description: Description of algorithm
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

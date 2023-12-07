@@ -1,8 +1,0 @@
-prefix=/home/shu233/woooork/my_autonomous_navigation/Course_Project_1/devel
-
-Name: jackal_msgs
-Description: Description of jackal_msgs
-Version: 0.8.5
-Cflags: -I/home/shu233/woooork/my_autonomous_navigation/Course_Project_1/devel/include
-Libs: -L${prefix}/lib 
-Requires: std_msgs message_runtime

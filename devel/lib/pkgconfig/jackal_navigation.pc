@@ -1,8 +1,0 @@
-prefix=/home/shu233/woooork/my_autonomous_navigation/Course_Project_1/devel
-
-Name: jackal_navigation
-Description: Description of jackal_navigation
-Version: 0.8.5
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 
