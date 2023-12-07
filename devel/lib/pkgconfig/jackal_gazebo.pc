@@ -1,8 +1,0 @@
-prefix=/home/stalin/UV-Course-Project-1/devel
-
-Name: jackal_gazebo
-Description: Description of jackal_gazebo
-Version: 0.4.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

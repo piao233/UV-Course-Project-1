@@ -1,8 +1,0 @@
-prefix=/home/stalin/UV-Course-Project-1/devel
-
-Name: jackal_description
-Description: Description of jackal_description
-Version: 0.8.5
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

@@ -1,8 +1,0 @@
-prefix=/home/stalin/UV-Course-Project-1/devel
-
-Name: algorithm
-Description: Description of algorithm
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 
