@@ -1,0 +1,8 @@
+prefix=/home/shu233/woooork/autonomous_navigation/devel
+
+Name: jackal_tutorials
+Description: Description of jackal_tutorials
+Version: 0.8.5
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

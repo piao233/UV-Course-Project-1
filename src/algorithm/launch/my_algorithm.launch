@@ -1,0 +1,7 @@
+<launch>
+		<arg name="world_arg" default= 514/>
+		<param name="world_name" value="${world_arg}" />
+		<node pkg="algorithm" name="algorithm" type="A_star.py" output="screen">
+		</node>
+
+</launch>
