@@ -1,4 +1,4 @@
-prefix=/home/shu233/woooork/my_autonomous_navigation/Course_Project_1/devel
+prefix=/home/stalin/UV-Course-Project-1/devel
 
 Name: jackal_control
 Description: Description of jackal_control
