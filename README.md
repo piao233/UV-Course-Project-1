@@ -5,9 +5,9 @@
 + A*生成的路径图保存到一个新文件夹：.../BARN/A_star_map；
 + 运行前请source。在run.py里面source绝对路径之后别人还用不用了！！愤怒！！自己写在~/.bashrc里面去！！！
 
-
-
-
+##  1215
++ run.py中增加 is_debug 选项，True时需要手动执行A_star.py并禁用超时
++ 依旧在研究物理坐标系和地图坐标系的区别
 
 
 # autonomous_navigation_project_2022w

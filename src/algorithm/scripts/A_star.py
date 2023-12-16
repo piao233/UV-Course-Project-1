@@ -15,16 +15,17 @@ from geometry_msgs.msg import Twist
 from gazebo_simulation import GazeboSimulation
 
 def world_to_map(world_coor:list):
-    
     map_coor = [0,0]
     map_coor[0] = 99 - int(world_coor[1]/0.15) 
     map_coor[1] = 29 + int(world_coor[0]/0.15) 
     return map_coor
+
 def map_to_world(map_coor:list):
     world_coor = [0,0]
     world_coor[1] = (99 - map_coor[0])*0.15
     world_coor[0] = (map_coor[1] - 29)*0.15
     return world_coor
+
 def distance(box1:list,box2:list):
     return 1.5*((box1[0]-box2[0])**2 + (box1[1]-box2[1])**2 )**0.5
     #return ((box1[0]-box2[0])**2)**0.5 + ((box1[1]-box2[1])**2)**0.5
@@ -46,7 +47,7 @@ class SearchTree(object):
         #print(type(self.closed))
         self.head = Map_node(start_loc)
         self.target = target_loc
-        self.path = [self.head]
+        self.path_coor = [start_loc]  # 只记录坐标
         self.openlist = [self.head]
         self.D_factor = 0
         self.D_factor1 = 2
@@ -90,6 +91,7 @@ class SearchTree(object):
                 D = i
                 break
         return self.D_factor1*(self.D_factor-D)
+    
     def find_maxA(self):
         open = self.openlist
         maxA = np.inf
@@ -101,6 +103,7 @@ class SearchTree(object):
                 max_index = index
         #print(maxA)
         return max_index
+    
     def search(self):
         while(1):
             index = self.find_maxA()
@@ -108,19 +111,21 @@ class SearchTree(object):
            #print(current_node.loc)
             self.closed[current_node.loc[0],current_node.loc[1]] = 1
             if current_node.loc == self.target:
-                path = self.back_propagation(current_node)
+                path = self.back_propagation(current_node)  # 从尾到头
                 pgm = self.map_img.copy()
-                for path_node in path:
+                for path_node in reversed(path):
                     print(path_node.loc)
+                    self.path_coor.append([path_node.loc[0], path_node.loc[1]])
                     if path_node.loc[0] - 34 < pgm.size[1] and path_node.loc[1] < pgm.size[0] and path_node.loc[0]>34:
                         pgm.putpixel((path_node.loc[1],path_node.loc[0]-34),128)
-                
-
                 save_path = join(base_path, 'worlds/BARN/A_star_map', world_name)
                 pgm.save(save_path)
                 break
             else:
                 self.add_to_openlist(current_node)
+
+        return self.path_coor  # 返回从头到尾的路径坐标 地图像素坐标
+
     def back_propagation(self,target_node:Map_node):
         node = target_node
         path = []
@@ -128,7 +133,7 @@ class SearchTree(object):
             path.append(node)
             node = node.parent
         return path
-    
+
 
 from scipy.spatial.transform import Rotation as R
 
@@ -138,6 +143,10 @@ def quaternion2euler(quaternion):
     return euler  
 
 
+# TODO
+def generate_twist():
+    # vel = ((goal_coor[0] - pos.x)**2+(goal_coor[1] - pos.y)**2)**0.3
+    return [0,1]
 
 
 world_name = ""  # 全局，供保存路径图使用
@@ -146,19 +155,26 @@ if __name__ == '__main__':
 
     rospy.init_node('A_star', anonymous=True)
     rospack = rospkg.RosPack()
-    base_path = rospack.get_path('jackal_helper')
-    world_idx = rospy.get_param('world_num')
+    base_path = rospack.get_path('jackal_helper')  # 地图文件存放的基本路径
+
+
+    # ---------------------选择地图进行测试-------------------------------#
+    # world_idx = rospy.get_param('world_num')  # 获取roscore地图id
+    world_idx = 5  # 手动设置地图id
+
+
+
     world_name = "map_pgm_%d.pgm" %(world_idx)
 
     gazebo_sim = GazeboSimulation(init_position=INIT_POSITION)
-    init_coor = [INIT_POSITION[0], INIT_POSITION[1]]
-    goal_coor =  [GOAL_POSITION[0], GOAL_POSITION[1]]
-    im = Image.open(join(base_path, 'worlds/BARN/map_files', world_name))
+    init_coor = [INIT_POSITION[0], INIT_POSITION[1]]  # 物理坐标，初始点-2，3
+    goal_coor =  [GOAL_POSITION[0], GOAL_POSITION[1]]  # 物理坐标，目标点-2，13
+    im = Image.open(join(base_path, 'worlds/BARN/map_files', world_name))  # 读占用栅格地图
+    #hight 66 width 30 AKA 66*30
 
-    # im = Image.open("/home/stalin/autonomous_navigation/src/jackal_helper/worlds/BARN/map_files/map_pgm_5.pgm")    # 读取文件\\\
-    #30*66 0.0
-    #print(data.shape)
-    pixels = np.concatenate((255*np.ones((34,30)),np.matrix(im)))
+    pixels = np.concatenate((255*np.ones((34,30)),np.matrix(im)))  # 好像是在扩充完整地图，扩充到100*30，地图坐标范围
+    
+    
     #print(world_to_map([-0.15,0]))
     #print(world_to_map(GOAL_POSITION))
     #print(map_to_world(world_to_map(GOAL_POSITION)))
@@ -172,20 +188,31 @@ if __name__ == '__main__':
         #curr_time_0 = rospy.get_time()
         #if curr_time_0 - curr_time < 0.1:
             #time.sleep(0.1 - (curr_time_0 - curr_time))
-    print(world_to_map(init_coor),world_to_map(goal_coor))
-    #print(type(pixels))
-    ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor))
-    ST.search()
+
+
+    print(world_to_map(init_coor),world_to_map(goal_coor))  # 将物理坐标映射到地图上，地图上起点79,16; 终点13,16
+
+    ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor))  # 初始化搜索树
+    path_map_coor = ST.search()  # 使用A*搜索路径
+    path_phy_coor = [ map_to_world(i) for i in path_map_coor]
+    # 初始点-2 3，终点-2 13，物理坐标
+    # TODO: 地图坐标和物理坐标的转换有误差，比如起点物理坐标是-2，3，映射到地图上是79，16，但再映射回来就变成-1.95，3了。
+
     while(1):
         curr_time = rospy.get_time()
         
         pos = gazebo_sim.get_model_state().pose.position
         pose = gazebo_sim.get_model_state().pose.orientation
-        #print(pose.x)
         euler = quaternion2euler([pose.x,pose.y,pose.z,pose.w])
-        print(euler)
-        vel = ((goal_coor[0] - pos.x)**2+(goal_coor[1] - pos.y)**2)**0.3
-        gazebo_sim.pub_cmd_vel([0, 1])  # v w
+
+        # print(pose.x)
+        # print(euler) 
+
+        twist = generate_twist()
+        gazebo_sim.pub_cmd_vel(twist)  # v w
+
+
+
         curr_time_0 = rospy.get_time()
         if curr_time_0 - curr_time < 0.1:
             time.sleep(0.1 - (curr_time_0 - curr_time))
