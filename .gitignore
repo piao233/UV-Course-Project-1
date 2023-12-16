@@ -3,3 +3,5 @@ devel/*
 __pycache__/*
 
 src/scripts/__pycache__/
+
+src/algorithm/scripts/__pycache__/
