@@ -20,11 +20,13 @@ def world_to_map(world_coor:list):
     map_coor[0] = 99 - int(world_coor[1]/0.15) 
     map_coor[1] = 29 + int(world_coor[0]/0.15) 
     return map_coor
+
 def map_to_world(map_coor:list):
     world_coor = [0,0]
     world_coor[1] = (99 - map_coor[0])*0.15
     world_coor[0] = (map_coor[1] - 29)*0.15
     return world_coor
+
 def distance(box1:list,box2:list):
     return 1.5*((box1[0]-box2[0])**2 + (box1[1]-box2[1])**2 )**0.5
     #return ((box1[0]-box2[0])**2)**0.5 + ((box1[1]-box2[1])**2)**0.5
@@ -146,19 +148,26 @@ if __name__ == '__main__':
 
     rospy.init_node('A_star', anonymous=True)
     rospack = rospkg.RosPack()
-    base_path = rospack.get_path('jackal_helper')
-    world_idx = rospy.get_param('world_num')
+    base_path = rospack.get_path('jackal_helper')  # 地图文件存放的基本路径
+
+
+    # ---------------------选择地图进行测试-------------------------------#
+    # world_idx = rospy.get_param('world_num')  # 获取roscore地图id
+    world_idx = 5  # 手动设置地图id
+
+
+
     world_name = "map_pgm_%d.pgm" %(world_idx)
 
     gazebo_sim = GazeboSimulation(init_position=INIT_POSITION)
-    init_coor = [INIT_POSITION[0], INIT_POSITION[1]]
-    goal_coor =  [GOAL_POSITION[0], GOAL_POSITION[1]]
-    im = Image.open(join(base_path, 'worlds/BARN/map_files', world_name))
+    init_coor = [INIT_POSITION[0], INIT_POSITION[1]]  # 物理坐标，初始点-2，3
+    goal_coor =  [GOAL_POSITION[0], GOAL_POSITION[1]]  # 物理坐标，目标点-2，13
+    im = Image.open(join(base_path, 'worlds/BARN/map_files', world_name))  # 读占用栅格地图
+    #hight 66 width 30 AKA 66*30
 
-    # im = Image.open("/home/stalin/autonomous_navigation/src/jackal_helper/worlds/BARN/map_files/map_pgm_5.pgm")    # 读取文件\\\
-    #30*66 0.0
-    #print(data.shape)
-    pixels = np.concatenate((255*np.ones((34,30)),np.matrix(im)))
+    pixels = np.concatenate((255*np.ones((34,30)),np.matrix(im)))  # 好像是在扩充完整地图，扩充到100*30，地图坐标范围
+    
+    
     #print(world_to_map([-0.15,0]))
     #print(world_to_map(GOAL_POSITION))
     #print(map_to_world(world_to_map(GOAL_POSITION)))
@@ -172,16 +181,19 @@ if __name__ == '__main__':
         #curr_time_0 = rospy.get_time()
         #if curr_time_0 - curr_time < 0.1:
             #time.sleep(0.1 - (curr_time_0 - curr_time))
-    print(world_to_map(init_coor),world_to_map(goal_coor))
-    #print(type(pixels))
-    ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor))
-    ST.search()
+
+
+    print(world_to_map(init_coor),world_to_map(goal_coor))  # 将物理坐标映射到地图上，地图上起点79,16; 终点13,16
+
+    ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor))  # 初始化搜索树
+    ST.search()  # 使用A*搜索路径
+
     while(1):
         curr_time = rospy.get_time()
         
         pos = gazebo_sim.get_model_state().pose.position
         pose = gazebo_sim.get_model_state().pose.orientation
-        #print(pose.x)
+        # print(pose.x)
         euler = quaternion2euler([pose.x,pose.y,pose.z,pose.w])
         print(euler)
         vel = ((goal_coor[0] - pos.x)**2+(goal_coor[1] - pos.y)**2)**0.3

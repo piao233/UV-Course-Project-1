@@ -104,7 +104,15 @@ if __name__ == "__main__":
     #print(data)
     #os.system('python test.py')
     #.WARN("Start my algorithm")
-    launch_file = join(base_path, '..', 'algorithm/launch/my_algorithm.launch')
+
+    is_debug = True
+
+    if(is_debug):
+        pass  # 手动执行A_star.py
+    else:
+        launch_file = join(base_path, '..', 'algorithm/launch/my_algorithm.launch')
+    
+    
     #print(launch_file)
     # DWA example,'world_arg:='+world_name
     #launch_file = join(base_path, '..', 'jackal_helper/launch/move_base_DWA.launch')
@@ -139,7 +147,13 @@ if __name__ == "__main__":
     start_time_cpu = time.time()
     collided = False
     
-    while compute_distance(goal_coor, curr_coor) > 1 and not collided and curr_time - start_time < 100:
+
+    if(is_debug):
+        timed_out = 999999  # 禁用超时
+    else:
+        timed_out = 100
+
+    while compute_distance(goal_coor, curr_coor) > 1 and not collided and curr_time - start_time < timed_out:
         curr_time = rospy.get_time()
         pos = gazebo_sim.get_model_state().pose.position
         curr_coor = (pos.x, pos.y)
