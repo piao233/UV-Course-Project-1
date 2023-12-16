@@ -105,7 +105,7 @@ if __name__ == "__main__":
     #os.system('python test.py')
     #.WARN("Start my algorithm")
 
-    is_debug = True
+    is_debug = False
 
     if(is_debug):
         pass  # 手动执行A_star.py
