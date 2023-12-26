@@ -9,3 +9,4 @@ src/algorithm/scripts/__pycache__/
 *.pyc
 
 *copy.py
+out.txt
