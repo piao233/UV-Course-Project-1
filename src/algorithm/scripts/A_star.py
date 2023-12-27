@@ -113,7 +113,7 @@ class SearchTree(object):
             self.closed[current_node.loc[0],current_node.loc[1]] = 1
             if current_node.loc == self.target:
                 self.path = self.back_propagation(current_node)
-                print("Done!")
+                print("----Path found with A*----")
                 if self.save_pic:
                     pgm = self.map_img.copy()
                     for path_node in self.path:
@@ -164,24 +164,83 @@ def img_dilate(bin_im, kernel,center_coo = [1,1]):
             dilate_img[i, j] = min(np.max(a * kernel),1)  # 若“有重合”，则点乘后最大值为0
     return dilate_img
 
-# TODO
-def generate_twist():
-    # vel = ((goal_coor[0] - pos.x)**2+(goal_coor[1] - pos.y)**2)**0.3
-    return [0,1]
+def angle_process(ang):
+    """
+    将角度换算到-pi度到+pi度
+    """
+    if ang > math.pi:
+        ang -= math.pi*2
+    if ang < -math.pi:
+        ang += math.pi*2
+    return ang
+
+def generate_twist(path, pos_x, pos_y, heading):
+    """
+    优化反馈控制，生成vx、vw控制率，按照上课PPT上来的，公式和参数详细解释看PPT
+    以path列表中的第一个点为规划目标，达到目标后删除第一个点
+    return: [v, w]
+    """
+    # ----参数----
+    vxmax = 2  # 最大线速度，完全不知道，编的
+    vwmax = 4  # 最大角速度，完全不知道，编的
+    dist_arrive = 0.5  # 距离多少米算到达了该点，太小车扭屁股，太大会删掉狭缝里的路径点
+    k1 = 1  # k1是beta的系数，大k1小车会更多的考虑到达目标点时候朝向下一个点，会将直线走成弧线
+    k2 = 5  # k2是kappa的整体增益，增大k2可以使路径更贴合连线，减小转弯半径，加快收敛
+    # k3、k4用作从kappa生成v，增大k3、k4转弯半径减小，k3效果更显著
+    k3 = 3  # 用作从kapa生成vx，狠狠增大k3可以让小车慢下来蠕动，几乎就是完全跟随路径
+    k4 = 1.2
+
+    # ----初始化----
+    # 空路径不处理
+    if len(path) <= 0:
+        return [0, 0]
+
+    # 到达目标点则删除之
+    p = math.hypot(path[0][1]-pos_y, path[0][0]-pos_x)  # 计算距离
+    if p < dist_arrive:  # 如果接近，就把点删了
+        del path[0]
+        return [0, 0]
+    
+    # 为目标点添加heading
+    path_heading = math.atan2(path[0][1]-pos_y, path[0][0]-pos_x)  # 机器人与目标点连线角度
+    if len(path) <= 1:  # 如果只剩一个点
+        obj_heading = path_heading  # 目标点heading设置为机器人与目标点连线
+    else:  # 如果还有一坨点
+        # obj_heading = path_heading
+        obj_heading = math.atan2(path[1][1]-path[0][1], path[1][0]-path[0][0])  # 目标点heading指向路路径下一点
+
+    # ----反馈控制----
+    a = angle_process(path_heading-heading)  # ∠α，定义为路径方位角与机器人当前方位角的差
+    b = angle_process(path_heading-obj_heading)  # ∠β，定义为当前路径方位角与下一路径方位角的差
+    kapa = (k2*(a-math.atan(-k1*b))+(1+k1/(1+(k1*b)**2))*math.sin(a))/p  # 计算κ
+    vx = vxmax/(1+k3*(math.fabs(kapa)**k4))  # 生成控制率
+    vw = vx*kapa
+    if abs(a) > 60:  # 如果机器人当前方位角与路径方位角相差过大（>60°），则原地转圈，避免碰撞
+        vx = 0
+        vw = vw/vw*vwmax
+    print("-----------------------------------------------------")
+    print("obj_x=", path[0][0], "obj_y=", path[0][1])
+    print("cur_x=", pos_x, "cur_y=", pos_y)
+    print("vx=", vx, "vw=", vw)
+    return vx, vw  # TODO:对vw输出进行限幅，但不限也没事
+
+
+
+    
 
 
 world_name = ""  # 全局，供保存路径图使用
 
 if __name__ == '__main__':
 
-    #rospy.init_node('A_star', anonymous=True)
+    rospy.init_node('A_star', anonymous=True)
     rospack = rospkg.RosPack()
     base_path = rospack.get_path('jackal_helper')  # 地图文件存放的基本路径
 
 
     # ---------------------选择地图进行测试-------------------------------#
-    #world_idx = rospy.get_param('world_num')  # 获取roscore地图id
-    world_idx = 4  # 手动设置地图id
+    world_idx = rospy.get_param('world_num')  # 获取roscore地图id
+    # world_idx = 5  # 手动设置地图id
 
     
 
@@ -199,33 +258,27 @@ if __name__ == '__main__':
     ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor))  # 初始化搜索树
     path_map_coor = ST.search()  # 使用A*搜索路径
     print(path_map_coor)
-    path_phy_coor = [ map_to_world(i) for i in path_map_coor]
-    exit(0)
+    path_phy_coor = [map_to_world(i) for i in path_map_coor]
+
+    # exit(0)
+
     gazebo_sim = GazeboSimulation(init_position=INIT_POSITION)
-    #hight 66 width 30 AKA 66*30
-
-    
-    
-
-
-    #print(world_to_map(init_coor),world_to_map(goal_coor))  # 将物理坐标映射到地图上，地图上起点79,16; 终点13,16
-
-    
+    # hight 66 width 30 AKA 66*30
+    # print(world_to_map(init_coor), world_to_map(goal_coor))  # 将物理坐标映射到地图上，地图上起点79,16; 终点13,16
     # 初始点-2 3，终点-2 13，物理坐标
     # TODO: 地图坐标和物理坐标的转换有误差，比如起点物理坐标是-2，3，映射到地图上是79，16，但再映射回来就变成-1.95，3了。
     # 不是双射做不到！就这样了
+
     while(1):
         curr_time = rospy.get_time()
         
         pos = gazebo_sim.get_model_state().pose.position
-        pose = gazebo_sim.get_model_state().pose.orientation
-        euler = quaternion2euler([pose.x,pose.y,pose.z,pose.w])
+        pose_quat = gazebo_sim.get_model_state().pose.orientation
+        pose = quaternion2euler([pose_quat.x,pose_quat.y,pose_quat.z,pose_quat.w])  # Euler ZYX
+        heading = pose[0]  # in degree, starting at +90
 
-        # print(pose.x)
-        # print(euler) 
-
-        twist = generate_twist()
-        gazebo_sim.pub_cmd_vel(twist)  # v w
+        twist = generate_twist(path_phy_coor, pos.x, pos.y, heading/180*math.pi)  # v w
+        gazebo_sim.pub_cmd_vel(twist)  
 
 
 

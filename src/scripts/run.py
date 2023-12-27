@@ -30,7 +30,7 @@ def path_coord_to_gazebo_coord(x, y):
 if __name__ == "__main__":
 
     # os.system("source /home/stalin/autonomous_navigation/devel/setup.sh")
-    # 这这句话自己写在~/.bashrc里面去，写在这儿除了stalin之外谁都报错
+    # 这句话自己写在~/.bashrc里面去，写在这儿除了stalin之外谁都报错
 
     parser = argparse.ArgumentParser(description = 'test BARN navigation challenge')
     parser.add_argument('--world_idx', type=int)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
         pass  # 手动执行A_star.py
     else:
         launch_file = join(base_path, '..', 'algorithm/launch/my_algorithm.launch')
-    
+        subprocess.Popen(args = ['roslaunch', launch_file ,'world_arg:='+ str(args.world_idx)])
     
     #print(launch_file)
     # DWA example,'world_arg:='+world_name
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     #launch_file = join(base_path, '..', 'jackal_helper/launch/move_base_eband.launch')
     #nav_stack_process = subprocess.Popen(args=['roslaunch',launch_file])
     #print(curr_coor)
-    subprocess.Popen(args = ['roslaunch', launch_file ,'world_arg:='+ str(args.world_idx)])
+    
     print("continue..")
     
     # Make sure your navigation stack recives a goal of (0, 10, 0), which is 10 meters away
