@@ -12,7 +12,7 @@
 + A_star现在加上改参数的接口了，详细见Search_Tree 的__init__()
 + 修复一些bug，改进算法提高成功率
 ##  1219 zhy
-+ 禁止生气，给你删了:smile:
++ 禁止生气，给你删了 :smile:
 # autonomous_navigation_project_2022w
 BARN Challenge in ICRA 2022 as course project
 
