@@ -28,7 +28,8 @@ def map_to_world(map_coor:list):
 
 def distance(box1:list,box2:list):
     return ((box1[0]-box2[0])**2 + (box1[1]-box2[1])**2 )**0.5
-
+def average (box1:list,box2:list):
+    return [(box1[0]+box2[0])/2,(box1[1]+box2[1])/2]
 
 class Map_node(object):
     def __init__(self,loc:list,parent=None,H = 0,G = 0,D = 0):
@@ -39,7 +40,16 @@ class Map_node(object):
         self.G = G
         self.D = D
         
-class SearchTree(object):     
+class SearchTree(object):  
+    """
+    计算改进A*的对象，参数如名字所示
+    param
+    D 到最近障碍物参数(越近越大) = D_init - Distance(nearest obstacles)
+    G 步数
+    H 到终点距离
+    factor 为系数，分别为 G_factor,H_factor,D_factor,D_init
+    A = D_factor*D + H_factor*H + G_factor*G
+    """   
     def __init__(self,map_file:np.matrix,map_img:Image.Image,start_loc,target_loc,factor = (2,0,1,0),save_pic = True,Max_Step = 100000,Max_Try = 10):
         self.map = map_file
         self.closed = np.matrix(np.zeros(map_file.shape))
@@ -55,8 +65,18 @@ class SearchTree(object):
         self.map_img = map_img
         self.Max_Step = Max_Step
         self.Max_Try = Max_Try
-        self.downsamplepath = []
+        #我 们 仨
+        self.downsamplepath = []#删除直线上的点
+        self.deepdownsamplepath = []#删除非碰撞点
+        self.deeperdownsamplepath = []#合并太近的点
+        self.path_node = []
+        self.max_D = -np.inf #内部参数别管
+        self.collision_factor = 0 #判断碰撞裕度，要是觉得扭屁股就调高点，可能导致撞墙，调低避免撞墙
+        self.merge_limit = 4 #第三步合并点距离判断
     def find_children_loc(self,loc:list):
+        """
+        拓展节点
+        """
         actions = [[1,0],[1,1],[-1,0],[-1,-1],[-1,1],[1,-1],[0,1],[0,-1]]
         children = []
         for action in actions:
@@ -66,6 +86,9 @@ class SearchTree(object):
                         children.append([loc[0]+action[0],loc[1]+action[1]])
         return children                
     def add_to_openlist(self,p_node:Map_node):
+        """
+        添加到openlist
+        """
         loc = p_node.loc
         actions = [[1,0],[1,1],[-1,0],[-1,-1],[-1,1],[1,-1],[0,1],[0,-1]]
         children = []
@@ -81,6 +104,9 @@ class SearchTree(object):
             p_node.children.append(node)
             self.openlist.append(node)
     def cal_D(self,loc):
+        """
+        计算D
+        """
         i = 0
         while(1):
             i = i+1
@@ -93,6 +119,10 @@ class SearchTree(object):
         return (self.D_init-D)
     
     def find_maxA(self):
+        """
+        pop openlist中A最小的节点
+        排除坐标重复但参数不重复的项
+        """
         open = self.openlist
         maxA = np.inf
         max_index = 0
@@ -106,7 +136,7 @@ class SearchTree(object):
         return max_index
         
     def search(self):
-
+        """搜索进程"""
         step  = 0
         while(True):
             index = self.find_maxA()
@@ -116,13 +146,23 @@ class SearchTree(object):
                 self.path = self.back_propagation(current_node)
                 self.path.reverse()
                 self.delete_points()
+                self.delete_points_nocollision()
+                self.deep_delete_points()
                 print("----Path found with A*----")
                 if self.save_pic:
                     pgm = self.map_img.copy()
                     for path_node in self.path:
                         if path_node[0] - 34 < pgm.size[1] and path_node[1] < pgm.size[0] and path_node[0] > 34:
+                            pgm.putpixel((path_node[1],path_node[0]-34),200)
+                    for path_node in self.downsamplepath:
+                        if path_node[0] - 34 < pgm.size[1] and path_node[1] < pgm.size[0] and path_node[0] > 34:
                             pgm.putpixel((path_node[1],path_node[0]-34),128)
-                        
+                    for path_node in self.deepdownsamplepath:
+                        if path_node[0] - 34 < pgm.size[1] and path_node[1] < pgm.size[0] and path_node[0] > 34:
+                            pgm.putpixel((path_node[1],path_node[0]-34),64)       
+                    for path_node in self.deeperdownsamplepath:
+                        if path_node[0] - 34 < pgm.size[1] and path_node[1] < pgm.size[0] and path_node[0] > 34:
+                            pgm.putpixel((int(path_node[1]),int(path_node[0])-34),256)
                     save_path = join(base_path, 'worlds/BARN/A_star_map', world_name)
                     pgm.save(save_path)
                 
@@ -136,23 +176,79 @@ class SearchTree(object):
           # 返回从头到尾的路径坐标 地图像素坐标
         return []
     def delete_points(self):
+        """初步删除"""
         move = [[self.path[1][0] - self.path[0][0],self.path[1][1] - self.path[0][1]]]
         for i in range (1,self.path.__len__() - 1):
-            if self.path[i+1][0] < 30:
-                break
             move.append([self.path[i+1][0] - self.path[i][0],self.path[i+1][1] - self.path[i][1]])
             if move[i] != move[i-1]:
                 self.downsamplepath.append(self.path[i])
-        self.downsamplepath.append(self.target)   
+        self.downsamplepath.append(self.target) 
+    def delete_points_nocollision(self):
+        """进一步删除"""
+        self.deepdownsamplepath.append(self.head.loc)
+        i = 0
+        while self.deepdownsamplepath[-1] != self.downsamplepath[-1]:
+            for j in range(i,self.downsamplepath.__len__()):
+                #print(j,self.deepdownsamplepath[-1],self.downsamplepath[j],self.downsamplepath.__len__())
+                if self.path_collision(self.deepdownsamplepath[-1],self.downsamplepath[j]):
+                    if j != i:
+                        self.deepdownsamplepath.append(self.downsamplepath[j-1])
+
+                        i = j
+                        break
+                    else:
+                        self.deepdownsamplepath.append(self.downsamplepath[j])
+                        i = j + 1
+                        break
+            if j == self.downsamplepath.__len__()-1:
+                self.deepdownsamplepath.append(self.downsamplepath[j])
+    def deep_delete_points(self):
+        """合并过近的点"""
+        for i in range(self.deepdownsamplepath.__len__()-1):
+            if distance(self.deepdownsamplepath[i],self.deepdownsamplepath[i+1]) < self.merge_limit:
+                self.deeperdownsamplepath.append(average(self.deepdownsamplepath[i],self.deepdownsamplepath[i+1]))
+                i = i + 1
+            else:
+                self.deeperdownsamplepath.append(self.deepdownsamplepath[i])
+    
+    def path_collision(self,loc1,loc2):
+        """判断碰撞"""
+        if loc1 == loc2:
+            return False
+        L = loc1[0] - loc2[0]
+        H = loc1[1] - loc2[1]
+
+        if abs(L) > abs(H):
+            factor = H/L
+            for i in range(abs(L)):
+                loc = [loc2[0] + i,int(loc2[1] + factor*i)]
+                D = self.cal_D(loc)
+                if D >= self.max_D + self.collision_factor:
+                    return True
+        else:
+            factor = L/H
+            for i in range(abs(H)):
+                loc = [int(loc2[0] + factor*i),loc2[1] + i]
+                D = self.cal_D(loc)
+                if D >= self.max_D + self.collision_factor:
+                    return True
+        return False
+        
     def Update_factor(self,step = 0.1):
+        """更新参数, aborted"""
         self.G_factor = self.G_factor + step
     def back_propagation(self,target_node:Map_node):
+        """遍历搜索到的路径"""
         node = target_node
-        path = []
         while node.parent is not None:
-            path.append(node.loc)
+            if node.D > self.max_D:
+                self.max_D = node.D
+            self.path.append(node.loc)
+            self.path_node.append(node)
             node = node.parent
-        return path
+        #print("max_D")
+        #print(self.max_D)
+        return self.path
 
 
 from scipy.spatial.transform import Rotation as R
@@ -198,10 +294,10 @@ def generate_twist(path, pos_x, pos_y, heading):
     vxmax = 2  # 最大线速度，完全不知道，编的
     vwmax = 4  # 最大角速度，完全不知道，编的
     dist_arrive = 0.5  # 距离多少米算到达了该点，太小车扭屁股，太大会删掉狭缝里的路径点
-    k1 = 1  # k1是beta的系数，大k1小车会更多的考虑到达目标点时候朝向下一个点，会将直线走成弧线
+    k1 = 0.5 # k1是beta的系数，大k1小车会更多的考虑到达目标点时候朝向下一个点，会将直线走成弧线
     k2 = 5  # k2是kappa的整体增益，增大k2可以使路径更贴合连线，减小转弯半径，加快收敛
     # k3、k4用作从kappa生成v，增大k3、k4转弯半径减小，k3效果更显著
-    k3 = 3  # 用作从kapa生成vx，狠狠增大k3可以让小车慢下来蠕动，几乎就是完全跟随路径
+    k3 = 0.5  # 用作从kapa生成vx，狠狠增大k3可以让小车慢下来蠕动，几乎就是完全跟随路径
     k4 = 1.2
 
     # ----初始化----
@@ -254,7 +350,7 @@ if __name__ == '__main__':
 
     # ---------------------选择地图进行测试-------------------------------#
     world_idx = rospy.get_param('world_num')  # 获取roscore地图id
-    #world_idx = 1  # 手动设置地图id
+    #world_idx = 200 # 手动设置地图id
 
     
 
@@ -273,9 +369,10 @@ if __name__ == '__main__':
     path_map_coor = ST.search()  # 使用A*搜索路径
     print(path_map_coor)
     print(ST.downsamplepath) #减少中间点的结果
-    #print(ST.path)
+    print(ST.deepdownsamplepath)#进一步减少中间点的结果
+    print(ST.deeperdownsamplepath)
     path_phy_coor = [map_to_world(i) for i in path_map_coor]
-
+    #print(ST.path_collision([68,21],[36,8]))
     #exit(0)
 
     gazebo_sim = GazeboSimulation(init_position=INIT_POSITION)
