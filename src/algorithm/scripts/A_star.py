@@ -46,7 +46,7 @@ class SearchTree(object):
         self.save_pic = save_pic
         self.head = Map_node(start_loc)
         self.target = target_loc
-        self.path = [self.head]
+        self.path = []
         self.openlist = [self.head]
         self.G_factor = factor[0]
         self.H_factor = factor[1]
@@ -55,6 +55,7 @@ class SearchTree(object):
         self.map_img = map_img
         self.Max_Step = Max_Step
         self.Max_Try = Max_Try
+        self.downsamplepath = []
     def find_children_loc(self,loc:list):
         actions = [[1,0],[1,1],[-1,0],[-1,-1],[-1,1],[1,-1],[0,1],[0,-1]]
         children = []
@@ -113,15 +114,18 @@ class SearchTree(object):
             self.closed[current_node.loc[0],current_node.loc[1]] = 1
             if current_node.loc == self.target:
                 self.path = self.back_propagation(current_node)
+                self.path.reverse()
+                self.delete_points()
                 print("----Path found with A*----")
                 if self.save_pic:
                     pgm = self.map_img.copy()
                     for path_node in self.path:
-                        if path_node[0] - 34 < pgm.size[1] and path_node[1] < pgm.size[0] and path_node[0]>34:
+                        if path_node[0] - 34 < pgm.size[1] and path_node[1] < pgm.size[0] and path_node[0] > 34:
                             pgm.putpixel((path_node[1],path_node[0]-34),128)
+                        
                     save_path = join(base_path, 'worlds/BARN/A_star_map', world_name)
                     pgm.save(save_path)
-                self.path.reverse()
+                
                 return self.path
             else:
                 self.add_to_openlist(current_node)
@@ -131,6 +135,15 @@ class SearchTree(object):
                 break
           # 返回从头到尾的路径坐标 地图像素坐标
         return []
+    def delete_points(self):
+        move = [[self.path[1][0] - self.path[0][0],self.path[1][1] - self.path[0][1]]]
+        for i in range (1,self.path.__len__() - 1):
+            if self.path[i+1][0] < 30:
+                break
+            move.append([self.path[i+1][0] - self.path[i][0],self.path[i+1][1] - self.path[i][1]])
+            if move[i] != move[i-1]:
+                self.downsamplepath.append(self.path[i])
+        self.downsamplepath.append(self.target)   
     def Update_factor(self,step = 0.1):
         self.G_factor = self.G_factor + step
     def back_propagation(self,target_node:Map_node):
@@ -163,6 +176,7 @@ def img_dilate(bin_im, kernel,center_coo = [1,1]):
                 j - center_coo[1]:j - center_coo[1] + kernel_h]
             dilate_img[i, j] = min(np.max(a * kernel),1)  # 若“有重合”，则点乘后最大值为0
     return dilate_img
+
 
 def angle_process(ang):
     """
@@ -240,7 +254,7 @@ if __name__ == '__main__':
 
     # ---------------------选择地图进行测试-------------------------------#
     world_idx = rospy.get_param('world_num')  # 获取roscore地图id
-    # world_idx = 5  # 手动设置地图id
+    #world_idx = 1  # 手动设置地图id
 
     
 
@@ -258,9 +272,11 @@ if __name__ == '__main__':
     ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor))  # 初始化搜索树
     path_map_coor = ST.search()  # 使用A*搜索路径
     print(path_map_coor)
+    print(ST.downsamplepath) #减少中间点的结果
+    #print(ST.path)
     path_phy_coor = [map_to_world(i) for i in path_map_coor]
 
-    # exit(0)
+    #exit(0)
 
     gazebo_sim = GazeboSimulation(init_position=INIT_POSITION)
     # hight 66 width 30 AKA 66*30
