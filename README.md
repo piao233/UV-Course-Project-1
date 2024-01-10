@@ -34,7 +34,12 @@
 ## 1227 zhy
 + 改了一下A*路径
 + A*路径很简单的，而且其实这玩意不判断是否撞上（
-
++ 添加downsamplepath元素，和计算它的方法，通过ST.downsamplepath直接使用，已经在search函数中计算。
++ 添加deepdownsamplepath，再删点不碰撞的
++ 添加deeperdownsamplepath，再合并一下 这仨想用哪个用哪个 返回的路径还是最开始的
++ 注意deeperdownsamplepath的点不全是整数，毕竟取平均
++ 调参交给你了加油
++ 加了些注释
 # autonomous_navigation_project_2022w
 
 BARN Challenge in ICRA 2022 as course project
