@@ -13,7 +13,9 @@ import rospkg
 import math
 from geometry_msgs.msg import Twist
 from gazebo_simulation import GazeboSimulation
-
+import matplotlib.pyplot as plt
+map_offset = -0.5 
+#地图映射偏置，现在默认-0.5可以跑通2，越大越容易右轮撞墙，越小越容易左轮撞墙
 def world_to_map(world_coor:list):
     map_coor = [0,0]
     map_coor[0] = 99 - int(world_coor[1]/0.15) 
@@ -22,8 +24,8 @@ def world_to_map(world_coor:list):
 
 def map_to_world(map_coor:list):
     world_coor = [0,0]
-    world_coor[1] = (99 - map_coor[0])*0.15
-    world_coor[0] = (map_coor[1] - 29)*0.15
+    world_coor[1] = (99 - map_coor[0])*0.15 + map_offset
+    world_coor[0] = (map_coor[1] - 29)*0.15 + map_offset
     return world_coor
 
 def distance(box1:list,box2:list):
@@ -204,12 +206,15 @@ class SearchTree(object):
                 self.deepdownsamplepath.append(self.downsamplepath[j])
     def deep_delete_points(self):
         """合并过近的点"""
-        for i in range(self.deepdownsamplepath.__len__()-1):
+        i = 0
+        while i <= self.deepdownsamplepath.__len__()-2:  # 后面用到了i+1，最后手动补终点
             if distance(self.deepdownsamplepath[i],self.deepdownsamplepath[i+1]) < self.merge_limit:
                 self.deeperdownsamplepath.append(average(self.deepdownsamplepath[i],self.deepdownsamplepath[i+1]))
-                i = i + 1
+                i += 1  # 跳一个点
             else:
                 self.deeperdownsamplepath.append(self.deepdownsamplepath[i])
+            i += 1
+        self.deeperdownsamplepath.append(self.target)  # 保证终点在队列里
     
     def path_collision(self,loc1,loc2):
         """判断碰撞"""
@@ -291,14 +296,15 @@ def generate_twist(path, pos_x, pos_y, heading):
     return: [v, w]
     """
     # ----参数----
-    vxmax = 2  # 最大线速度，完全不知道，编的
-    vwmax = 4  # 最大角速度，完全不知道，编的
-    dist_arrive = 0.5  # 距离多少米算到达了该点，太小车扭屁股，太大会删掉狭缝里的路径点
-    k1 = 0.5 # k1是beta的系数，大k1小车会更多的考虑到达目标点时候朝向下一个点，会将直线走成弧线
-    k2 = 5  # k2是kappa的整体增益，增大k2可以使路径更贴合连线，减小转弯半径，加快收敛
+    vxmax = 2  # 最大线速度，完全不知道，编的。增大vmax需要减小k5。长直线后冲过端点需要减小vmxax
+    vwmax = 2  # 最大角速度，完全不知道，编的
+    dist_arrive = 0.35  # 距离多少米算到达了该点，太小车扭屁股，太大会删掉狭缝里的路径点
+    k1 = 0.05 # k1是beta的系数，大k1小车会更多的考虑到达目标点时候朝向下一个点，会将直线走成弧线
+    k2 = 4  # 主要影响kappa大小的系数，要求远大于1
     # k3、k4用作从kappa生成v，增大k3、k4转弯半径减小，k3效果更显著
-    k3 = 0.5  # 用作从kapa生成vx，狠狠增大k3可以让小车慢下来蠕动，几乎就是完全跟随路径
-    k4 = 1.2
+    k3 = 4  # 用作从kapa生成vx，狠狠增大k3可以让小车在路径上整体减慢，几乎就是完全跟随路径
+    k4 = 2.0  # k4在kappa的指数项上，当路径曲率变大的时候会猛增，增大k4有助于在末端减速，相对来讲直线部分不受影响，但过大会导致当小车没对准的时候压根开不动
+    k5 = 3.0  # 倍增角速度控制量，发现仿真环境中角速度控制总是达不到理想值，k5过大可能直线上摇头晃脑，k5过小会导致过冲目标点（后原地掉头
 
     # ----初始化----
     # 空路径不处理
@@ -307,9 +313,9 @@ def generate_twist(path, pos_x, pos_y, heading):
 
     # 到达目标点则删除之
     p = math.hypot(path[0][1]-pos_y, path[0][0]-pos_x)  # 计算距离
-    if p < dist_arrive:  # 如果接近，就把点删了
+    if p < dist_arrive and len(path) > 1:  # 如果接近，就把点删了，当然不许删最后一个点
         del path[0]
-        return [0, 0]
+        # return [0, 0]
     
     # 为目标点添加heading
     path_heading = math.atan2(path[0][1]-pos_y, path[0][0]-pos_x)  # 机器人与目标点连线角度
@@ -322,16 +328,16 @@ def generate_twist(path, pos_x, pos_y, heading):
     # ----反馈控制----
     a = angle_process(path_heading-heading)  # ∠α，定义为路径方位角与机器人当前方位角的差
     b = angle_process(path_heading-obj_heading)  # ∠β，定义为当前路径方位角与下一路径方位角的差
-    kapa = (k2*(a-math.atan(-k1*b))+(1+k1/(1+(k1*b)**2))*math.sin(a))/p  # 计算κ
+    kapa = (k2*(a-math.atan(-k1*b))+math.sin(a)*(1+k1/(1+(k1*b)*(k1*b))))/(p**2)  # 计算κ
     vx = vxmax/(1+k3*(math.fabs(kapa)**k4))  # 生成控制率
-    vw = vx*kapa
-    if abs(a) > 60:  # 如果机器人当前方位角与路径方位角相差过大（>60°），则原地转圈，避免碰撞
-        vx = 0
-        vw = vw/vw*vwmax
+    vw = vx*kapa*k5
+    if abs(a) > 45/180*math.pi:  # 如果机器人当前方位角与路径方位角相差过大（>45°），则倒车转圈，避免碰撞
+        vx = -vx
+        vw = a/abs(a)*vw/vw*vwmax  # 之前这里忘了加方向所以在转大圈圈
     print("-----------------------------------------------------")
-    print("obj_x=", path[0][0], "obj_y=", path[0][1])
-    print("cur_x=", pos_x, "cur_y=", pos_y)
-    print("vx=", vx, "vw=", vw)
+    print("obj_x=%.4f, obj_y=%.4f" % (path[0][0], path[0][1]))
+    print("cur_x=%.4f, cur_y=%.4f, heading=%.2f, target_heading=%.2f" % (pos_x, pos_y, heading/math.pi*180, obj_heading/math.pi*180))
+    print("vx   =%.4f, vw   =%.4f" % (vx, vw))
     return vx, vw  # TODO:对vw输出进行限幅，但不限也没事
 
 
@@ -371,7 +377,14 @@ if __name__ == '__main__':
     print(ST.downsamplepath) #减少中间点的结果
     print(ST.deepdownsamplepath)#进一步减少中间点的结果
     print(ST.deeperdownsamplepath)
-    path_phy_coor = [map_to_world(i) for i in path_map_coor]
+
+    # ------------------选用哪个路径----------------------------------------------
+    # path_phy_coor = [map_to_world(i) for i in path_map_coor]
+    # path_phy_coor = [map_to_world(i) for i in ST.downsamplepath]
+    # path_phy_coor = [map_to_world(i) for i in ST.deepdownsamplepath]
+    path_phy_coor = [map_to_world(i) for i in ST.deeperdownsamplepath]
+    #----------------------------------------------------------------------------
+
     #print(ST.path_collision([68,21],[36,8]))
     #exit(0)
 
@@ -379,8 +392,14 @@ if __name__ == '__main__':
     # hight 66 width 30 AKA 66*30
     # print(world_to_map(init_coor), world_to_map(goal_coor))  # 将物理坐标映射到地图上，地图上起点79,16; 终点13,16
     # 初始点-2 3，终点-2 13，物理坐标
-    # TODO: 地图坐标和物理坐标的转换有误差，比如起点物理坐标是-2，3，映射到地图上是79，16，但再映射回来就变成-1.95，3了。
+    # 地图坐标和物理坐标的转换有误差，比如起点物理坐标是-2，3，映射到地图上是79，16，但再映射回来就变成-1.95，3了。
     # 不是双射做不到！就这样了
+
+    # 记录轨迹
+    A_star_path = np.array(path_phy_coor).T.copy()
+    pos_x = [-2, -2, -2, -2]
+    pos_y = [3, 3, 3, 3]
+    head = [90, 90, 90, 90]
 
     while(1):
         curr_time = rospy.get_time()
@@ -393,8 +412,22 @@ if __name__ == '__main__':
         twist = generate_twist(path_phy_coor, pos.x, pos.y, heading/180*math.pi)  # v w
         gazebo_sim.pub_cmd_vel(twist)  
 
-
-
+        # 保存作图数据
+        pos_x.append(pos.x)
+        pos_y.append(pos.y)
+        head.append(heading)  # in dgree
+        # 设置退出
+        if pos.x == pos_x[-4]:  # 有一阵子没动了
+            break
+        
+        # 测试得单轮规划时间约在0.01s
         curr_time_0 = rospy.get_time()
-        if curr_time_0 - curr_time < 0.1:
+        if curr_time_0 - curr_time < 0.02:
             time.sleep(0.1 - (curr_time_0 - curr_time))
+
+    plt.plot(A_star_path[0,:], A_star_path[1,:], label='A_star_path')
+    plt.scatter(A_star_path[0,:], A_star_path[1,:],)
+    plt.plot(pos_x, pos_y, label='real_traj')
+    
+    plt.legend(loc='upper right')
+    plt.show()
