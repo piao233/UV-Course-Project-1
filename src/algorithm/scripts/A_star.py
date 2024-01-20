@@ -118,8 +118,8 @@ class SearchTree(object):
             if not self.map[loc[0]-i:loc[0]+i,loc[1]-i:loc[1]+i].all(): 
                 D = i
                 break
-        return (self.D_init-D)
-    
+        #return (-math.log(self.D_init*D)) 
+        return self.D_init - D
     def find_maxA(self):
         """
         pop openlist中A最小的节点
@@ -195,7 +195,6 @@ class SearchTree(object):
                 if self.path_collision(self.deepdownsamplepath[-1],self.downsamplepath[j]):
                     if j != i:
                         self.deepdownsamplepath.append(self.downsamplepath[j-1])
-
                         i = j
                         break
                     else:
