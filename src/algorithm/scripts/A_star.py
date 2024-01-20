@@ -15,7 +15,7 @@ from geometry_msgs.msg import Twist
 from gazebo_simulation import GazeboSimulation
 import matplotlib.pyplot as plt
 map_offset = -0.15
-#地图映射偏置，现在默认-0.5可以跑通2，越大越容易右轮撞墙，越小越容易左轮撞墙
+#地图映射偏置，-0.15指往左0.15，往上0.15
 def world_to_map(world_coor:list):
     map_coor = [0,0]
     map_coor[0] = 99 - int(world_coor[1]/0.15) 
