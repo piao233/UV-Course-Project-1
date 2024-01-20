@@ -1,5 +1,7 @@
 # 开发记录
 
+##测试：
+roscore
 python3 ./src/scripts/run.py --gui --world_idx 5
 
 ## 0120 zyp
