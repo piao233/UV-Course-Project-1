@@ -13,4 +13,4 @@ out.txt
 src/algorithm/scripts/draft.py
 report/IEEEtran.cls
 report/Zhy_AKF_AGV.tex
-out.txt
+src/jackal_helper/worlds/BARN/A_star_map/*
