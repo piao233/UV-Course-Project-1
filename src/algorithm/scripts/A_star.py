@@ -14,7 +14,7 @@ import math
 from geometry_msgs.msg import Twist
 from gazebo_simulation import GazeboSimulation
 import matplotlib.pyplot as plt
-map_offset = -0.5 
+map_offset = -0.3 
 #地图映射偏置，现在默认-0.5可以跑通2，越大越容易右轮撞墙，越小越容易左轮撞墙
 def world_to_map(world_coor:list):
     map_coor = [0,0]
@@ -24,7 +24,7 @@ def world_to_map(world_coor:list):
 
 def map_to_world(map_coor:list):
     world_coor = [0,0]
-    world_coor[1] = (99 - map_coor[0])*0.15 + map_offset
+    world_coor[1] = (99 - map_coor[0])*0.15 - map_offset
     world_coor[0] = (map_coor[1] - 29)*0.15 + map_offset
     return world_coor
 
@@ -52,8 +52,9 @@ class SearchTree(object):
     factor 为系数，分别为 G_factor,H_factor,D_factor,D_init
     A = D_factor*D + H_factor*H + G_factor*G
     """   
-    def __init__(self,map_file:np.matrix,map_img:Image.Image,start_loc,target_loc,factor = (2,0,1,0),save_pic = True,Max_Step = 100000,Max_Try = 10):
+    def __init__(self,map_file:np.matrix,map_img:Image.Image,start_loc,target_loc,map_index,factor = (2,0,1,0),save_pic = True,Max_Step = 100000,Max_Try = 10):
         self.map = map_file
+        self.map_index = map_index
         self.closed = np.matrix(np.zeros(map_file.shape))
         self.save_pic = save_pic
         self.head = Map_node(start_loc)
@@ -73,8 +74,8 @@ class SearchTree(object):
         self.deeperdownsamplepath = []#合并太近的点
         self.path_node = []
         self.max_D = -np.inf #内部参数别管
-        self.collision_factor = 0 #判断碰撞裕度，要是觉得扭屁股就调高点，可能导致撞墙，调低避免撞墙
-        self.merge_limit = 4 #第三步合并点距离判断
+        self.collision_factor = -2 #判断碰撞裕度，要是觉得扭屁股就调高点，可能导致撞墙，调低避免撞墙
+        self.merge_limit = 5 #第三步合并点距离判断
     def find_children_loc(self,loc:list):
         """
         拓展节点
@@ -179,6 +180,11 @@ class SearchTree(object):
         return []
     def delete_points(self):
         """初步删除"""
+        for i in range (0,self.path.__len__()):
+            self.downsamplepath.append(self.path[i])
+            print(self.deepdownsamplepath)
+        return
+    
         move = [[self.path[1][0] - self.path[0][0],self.path[1][1] - self.path[0][1]]]
         for i in range (1,self.path.__len__() - 1):
             move.append([self.path[i+1][0] - self.path[i][0],self.path[i+1][1] - self.path[i][1]])
@@ -295,7 +301,7 @@ def generate_twist(path, pos_x, pos_y, heading):
     return: [v, w]
     """
     # ----参数----
-    vxmax = 2  # 最大线速度，完全不知道，编的。增大vmax需要减小k5。长直线后冲过端点需要减小vmxax
+    vxmax = 1  # 最大线速度，完全不知道，编的。增大vmax需要减小k5。长直线后冲过端点需要减小vmxax
     vwmax = 2  # 最大角速度，完全不知道，编的
     dist_arrive = 0.35  # 距离多少米算到达了该点，太小车扭屁股，太大会删掉狭缝里的路径点
     k1 = 0.05 # k1是beta的系数，大k1小车会更多的考虑到达目标点时候朝向下一个点，会将直线走成弧线
@@ -304,12 +310,12 @@ def generate_twist(path, pos_x, pos_y, heading):
     k3 = 4  # 用作从kapa生成vx，狠狠增大k3可以让小车在路径上整体减慢，几乎就是完全跟随路径
     k4 = 2.0  # k4在kappa的指数项上，当路径曲率变大的时候会猛增，增大k4有助于在末端减速，相对来讲直线部分不受影响，但过大会导致当小车没对准的时候压根开不动
     k5 = 3.0  # 倍增角速度控制量，发现仿真环境中角速度控制总是达不到理想值，k5过大可能直线上摇头晃脑，k5过小会导致过冲目标点（后原地掉头
-
+    
     # ----初始化----
     # 空路径不处理
     if len(path) <= 0:
         return [0, 0]
-
+    
     # 到达目标点则删除之
     p = math.hypot(path[0][1]-pos_y, path[0][0]-pos_x)  # 计算距离
     if p < dist_arrive and len(path) > 1:  # 如果接近，就把点删了，当然不许删最后一个点
@@ -370,7 +376,7 @@ if __name__ == '__main__':
     #print(1-pixels)
     #pixels = img_dilate(np.array(1-pixels),kernel)
     #print(pixels)
-    ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor))  # 初始化搜索树
+    ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor),world_idx)  # 初始化搜索树
     path_map_coor = ST.search()  # 使用A*搜索路径
     print(path_map_coor)
     print(ST.downsamplepath) #减少中间点的结果
@@ -399,7 +405,7 @@ if __name__ == '__main__':
     pos_x = [-2, -2, -2, -2]
     pos_y = [3, 3, 3, 3]
     head = [90, 90, 90, 90]
-
+    path_phy_coor.pop(0)
     while(1):
         curr_time = rospy.get_time()
         
@@ -407,7 +413,7 @@ if __name__ == '__main__':
         pose_quat = gazebo_sim.get_model_state().pose.orientation
         pose = quaternion2euler([pose_quat.x,pose_quat.y,pose_quat.z,pose_quat.w])  # Euler ZYX
         heading = pose[0]  # in degree, starting at +90
-
+        
         twist = generate_twist(path_phy_coor, pos.x, pos.y, heading/180*math.pi)  # v w
         gazebo_sim.pub_cmd_vel(twist)  
 
