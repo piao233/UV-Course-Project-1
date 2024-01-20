@@ -1,6 +1,9 @@
 #!/usr/bin/python3
 INIT_POSITION = [-2, 3, 2.57]  # in world frame
 GOAL_POSITION = [-2, 13, 1.57]  # relative to the initial position
+map_offset = -0.2  # 地图映射偏置，-0.15指往左0.15，往上0.15
+is_debug = False
+
 import time
 import argparse
 import subprocess
@@ -14,8 +17,7 @@ import math
 from geometry_msgs.msg import Twist
 from gazebo_simulation import GazeboSimulation
 import matplotlib.pyplot as plt
-map_offset = -0.15
-#地图映射偏置，-0.15指往左0.15，往上0.15
+
 def world_to_map(world_coor:list):
     map_coor = [0,0]
     map_coor[0] = 99 - int(world_coor[1]/0.15) 
@@ -74,8 +76,8 @@ class SearchTree(object):
         self.deeperdownsamplepath = []#合并太近的点
         self.path_node = []
         self.max_D = -np.inf #内部参数别管
-        self.collision_factor = -2 #判断碰撞裕度，要是觉得扭屁股就调高点，可能导致撞墙，调低避免撞墙
-        self.merge_limit = 5 #第三步合并点距离判断
+        self.collision_factor = 0 #判断碰撞裕度，要是觉得扭屁股就调高点，可能导致撞墙，调低避免撞墙
+        self.merge_limit = 4 #第三步合并点距离判断
     def find_children_loc(self,loc:list):
         """
         拓展节点
@@ -180,11 +182,6 @@ class SearchTree(object):
         return []
     def delete_points(self):
         """初步删除"""
-        for i in range (0,self.path.__len__()):
-            self.downsamplepath.append(self.path[i])
-            print(self.deepdownsamplepath)
-        return
-    
         move = [[self.path[1][0] - self.path[0][0],self.path[1][1] - self.path[0][1]]]
         for i in range (1,self.path.__len__() - 1):
             move.append([self.path[i+1][0] - self.path[i][0],self.path[i+1][1] - self.path[i][1]])
@@ -309,7 +306,7 @@ def generate_twist(path, pos_x, pos_y, heading):
     # k3、k4用作从kappa生成v，增大k3、k4转弯半径减小，k3效果更显著
     k3 = 4  # 用作从kapa生成vx，狠狠增大k3可以让小车在路径上整体减慢，几乎就是完全跟随路径
     k4 = 2.0  # k4在kappa的指数项上，当路径曲率变大的时候会猛增，增大k4有助于在末端减速，相对来讲直线部分不受影响，但过大会导致当小车没对准的时候压根开不动
-    k5 = 3.0  # 倍增角速度控制量，发现仿真环境中角速度控制总是达不到理想值，k5过大可能直线上摇头晃脑，k5过小会导致过冲目标点（后原地掉头
+    k5 = 4.0  # 倍增角速度控制量，发现仿真环境中角速度控制总是达不到理想值，k5过大可能直线上摇头晃脑，k5过小会导致过冲目标点（后原地掉头
     
     # ----初始化----
     # 空路径不处理
@@ -339,10 +336,12 @@ def generate_twist(path, pos_x, pos_y, heading):
     if abs(a) > 15/180*math.pi:  # 如果机器人当前方位角与路径方位角相差过大（>15°），则倒车转圈，避免碰撞
         vx = -0.1*vx
         vw = a/abs(a)*vw/vw*vwmax  # 之前这里忘了加方向所以在转大圈圈
-    print("-----------------------------------------------------")
-    print("obj_x=%.4f, obj_y=%.4f" % (path[0][0], path[0][1]))
-    print("cur_x=%.4f, cur_y=%.4f, heading=%.2f, target_heading=%.2f" % (pos_x, pos_y, heading/math.pi*180, obj_heading/math.pi*180))
-    print("vx   =%.4f, vw   =%.4f" % (vx, vw))
+
+    if is_debug:
+        print("-----------------------------------------------------")
+        print("obj_x=%.4f, obj_y=%.4f" % (path[0][0], path[0][1]))
+        print("cur_x=%.4f, cur_y=%.4f, heading=%.2f, path_heading=%.2f" % (pos_x, pos_y, heading/math.pi*180, path_heading/math.pi*180))
+        print("vx   =%.4f, vw   =%.4f" % (vx, vw))
     return vx, vw  # TODO:对vw输出进行限幅，但不限也没事
 
 
@@ -376,12 +375,14 @@ if __name__ == '__main__':
     #print(1-pixels)
     #pixels = img_dilate(np.array(1-pixels),kernel)
     #print(pixels)
+    print("Finding Path......")
     ST = SearchTree(pixels,im,world_to_map(init_coor),world_to_map(goal_coor),world_idx)  # 初始化搜索树
     path_map_coor = ST.search()  # 使用A*搜索路径
-    print(path_map_coor)
-    print(ST.downsamplepath) #减少中间点的结果
-    print(ST.deepdownsamplepath)#进一步减少中间点的结果
-    print(ST.deeperdownsamplepath)
+    if is_debug:
+        print(path_map_coor)
+        print(ST.downsamplepath) #减少中间点的结果
+        print(ST.deepdownsamplepath)#进一步减少中间点的结果
+        print(ST.deeperdownsamplepath)
 
     # ------------------选用哪个路径----------------------------------------------
     # path_phy_coor = [map_to_world(i) for i in path_map_coor]
@@ -408,7 +409,6 @@ if __name__ == '__main__':
     pos_x = [-2, -2, -2, -2]
     pos_y = [3, 3, 3, 3]
     head = [90, 90, 90, 90]
-    path_phy_coor.pop(0)
     while(1):
         curr_time = rospy.get_time()
         
@@ -433,9 +433,10 @@ if __name__ == '__main__':
         if curr_time_0 - curr_time < 0.02:
             time.sleep(0.1 - (curr_time_0 - curr_time))
 
-    plt.plot(A_star_path[0,:], A_star_path[1,:], label='A_star_path')
-    plt.scatter(A_star_path[0,:], A_star_path[1,:],)
-    plt.plot(pos_x, pos_y, label='real_traj')
-    
-    plt.legend(loc='upper right')
-    plt.show()
+    if is_debug:
+        plt.plot(A_star_path[0,:], A_star_path[1,:], label='A_star_path')
+        plt.scatter(A_star_path[0,:], A_star_path[1,:],)
+        plt.plot(pos_x, pos_y, label='real_traj')
+        
+        plt.legend(loc='upper right')
+        plt.show()
