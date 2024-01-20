@@ -26,7 +26,7 @@ def world_to_map(world_coor:list):
 
 def map_to_world(map_coor:list):
     world_coor = [0,0]
-    world_coor[1] = (99 - map_coor[0])*0.15 - map_offset
+    world_coor[1] = (99 - map_coor[0])*0.15 - map_offset + 0.1
     world_coor[0] = (map_coor[1] - 29)*0.15 + map_offset
     return world_coor
 
