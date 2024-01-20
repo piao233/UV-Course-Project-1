@@ -14,7 +14,7 @@ import math
 from geometry_msgs.msg import Twist
 from gazebo_simulation import GazeboSimulation
 import matplotlib.pyplot as plt
-map_offset = -0.3 
+map_offset = -0.15
 #地图映射偏置，现在默认-0.5可以跑通2，越大越容易右轮撞墙，越小越容易左轮撞墙
 def world_to_map(world_coor:list):
     map_coor = [0,0]
@@ -303,7 +303,7 @@ def generate_twist(path, pos_x, pos_y, heading):
     # ----参数----
     vxmax = 1  # 最大线速度，完全不知道，编的。增大vmax需要减小k5。长直线后冲过端点需要减小vmxax
     vwmax = 2  # 最大角速度，完全不知道，编的
-    dist_arrive = 0.35  # 距离多少米算到达了该点，太小车扭屁股，太大会删掉狭缝里的路径点
+    dist_arrive = 0.2  # 距离多少米算到达了该点，太小车扭屁股，太大会删掉狭缝里的路径点
     k1 = 0.05 # k1是beta的系数，大k1小车会更多的考虑到达目标点时候朝向下一个点，会将直线走成弧线
     k2 = 4  # 主要影响kappa大小的系数，要求远大于1
     # k3、k4用作从kappa生成v，增大k3、k4转弯半径减小，k3效果更显著
@@ -336,8 +336,8 @@ def generate_twist(path, pos_x, pos_y, heading):
     kapa = (k2*(a-math.atan(-k1*b))+math.sin(a)*(1+k1/(1+(k1*b)*(k1*b))))/(p**2)  # 计算κ
     vx = vxmax/(1+k3*(math.fabs(kapa)**k4))  # 生成控制率
     vw = vx*kapa*k5
-    if abs(a) > 45/180*math.pi:  # 如果机器人当前方位角与路径方位角相差过大（>45°），则倒车转圈，避免碰撞
-        vx = -vx
+    if abs(a) > 15/180*math.pi:  # 如果机器人当前方位角与路径方位角相差过大（>15°），则倒车转圈，避免碰撞
+        vx = -0.1*vx
         vw = a/abs(a)*vw/vw*vwmax  # 之前这里忘了加方向所以在转大圈圈
     print("-----------------------------------------------------")
     print("obj_x=%.4f, obj_y=%.4f" % (path[0][0], path[0][1]))
@@ -389,6 +389,9 @@ if __name__ == '__main__':
     # path_phy_coor = [map_to_world(i) for i in ST.deepdownsamplepath]
     path_phy_coor = [map_to_world(i) for i in ST.deeperdownsamplepath]
     #----------------------------------------------------------------------------
+
+    # 因后期由于物理地图和像素地图对不齐加了offset，起点也飞了，所以删掉起点
+    del path_phy_coor[0]
 
     #print(ST.path_collision([68,21],[36,8]))
     #exit(0)
