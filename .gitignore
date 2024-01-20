@@ -1,13 +1,9 @@
 build/*
 devel/*
 __pycache__/*
-
 src/scripts/__pycache__/
-
 src/algorithm/scripts/__pycache__/
-
 *.pyc
-
 *copy.py
 out.txt
 src/algorithm/scripts/draft.py
